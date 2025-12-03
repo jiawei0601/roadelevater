@@ -46,9 +46,15 @@ def load_data_from_gsheet():
              return pd.DataFrame()
 
         return df
-        
+    
+    # 🌟 修正點：新增 KeyError 捕獲，用於診斷欄位名稱不匹配問題
+    except KeyError as e:
+        # 捕捉 Pandas 找不到指定欄位的錯誤
+        st.error(f"資料結構錯誤：在您的 Google Sheet 中找不到必要的欄位。錯誤欄位名稱：{e}。")
+        st.error(f"請檢查您的 Google Sheet (工作表名稱: {WORKSHEET_NAME}) 中是否有完全符合這些名稱的欄位：'Road Name', 'Distance (m)', 'Elevation (m)'。")
+        return pd.DataFrame()
     except Exception as e:
-        # 捕捉 Gspread 可能的認證或連接錯誤
+        # 捕捉 Gspread 連接或其他未知錯誤
         st.error(f"Google Sheet 連接或讀取失敗。請檢查授權（共享給服務帳號的郵箱）和 Sheet 名稱。詳細錯誤：{e}")
         return pd.DataFrame()
 
