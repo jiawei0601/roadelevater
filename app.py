@@ -30,11 +30,31 @@ def load_data_from_gsheet():
         worksheet = sh.worksheet(WORKSHEET_NAME)
         
         # 讀取所有資料並轉換為 DataFrame
-        data = worksheet.get_all_records()
-        df = pd.DataFrame(data)
+        # 🌟 修正點：使用 get_all_values() 讀取所有內容，手動處理 header 和數據
+        data = worksheet.get_all_values()
         
+        if not data:
+            st.error("Google Sheet 載入成功，但工作表為空。")
+            return pd.DataFrame()
+
+        # 第一行作為欄位名稱 (Header)
+        header = data[0]
+        # 剩餘行作為數據 (Data)，並處理潛在的空字串/空白儲存格
+        df = pd.DataFrame(data[1:], columns=header)
+        
+        # 確保關鍵欄位名稱在 DataFrame 中存在
+        required_columns = ['Road Name', 'Distance (m)', 'Elevation (m)']
+        
+        # 檢查欄位名稱是否正確 (使用集合比較，更安全)
+        if not all(col in df.columns for col in required_columns):
+             missing_cols = [col for col in required_columns if col not in df.columns]
+             st.error(f"資料結構錯誤：在您的 Google Sheet 中找不到必要的欄位。缺失欄位：{', '.join(missing_cols)}。")
+             st.error(f"請檢查您的 Google Sheet (工作表名稱: {WORKSHEET_NAME}) 中是否有完全符合這些名稱的欄位：'Road Name', 'Distance (m)', 'Elevation (m)'。")
+             return pd.DataFrame()
+
         # 確保關鍵資料是正確的類型
         # 'Road Name' (字串), 'Distance (m)' (數值), 'Elevation (m)' (數值)
+        # 由於 get_all_values() 讀取的是字串，需要明確轉換
         df['Distance (m)'] = pd.to_numeric(df['Distance (m)'], errors='coerce')
         df['Elevation (m)'] = pd.to_numeric(df['Elevation (m)'], errors='coerce')
         
@@ -47,14 +67,8 @@ def load_data_from_gsheet():
 
         return df
     
-    # 🌟 修正點：新增 KeyError 捕獲，用於診斷欄位名稱不匹配問題
-    except KeyError as e:
-        # 捕捉 Pandas 找不到指定欄位的錯誤
-        st.error(f"資料結構錯誤：在您的 Google Sheet 中找不到必要的欄位。錯誤欄位名稱：{e}。")
-        st.error(f"請檢查您的 Google Sheet (工作表名稱: {WORKSHEET_NAME}) 中是否有完全符合這些名稱的欄位：'Road Name', 'Distance (m)', 'Elevation (m)'。")
-        return pd.DataFrame()
+    # 捕獲 Gspread 連接或其他未知錯誤
     except Exception as e:
-        # 捕捉 Gspread 連接或其他未知錯誤
         st.error(f"Google Sheet 連接或讀取失敗。請檢查授權（共享給服務帳號的郵箱）和 Sheet 名稱。詳細錯誤：{e}")
         return pd.DataFrame()
 
@@ -87,6 +101,11 @@ def main():
     # --- 側邊欄：道路選擇 ---
     st.sidebar.header("🛠️ 道路選擇與資料概覽")
     
+    # 確保 Road Name 欄位存在且非空
+    if 'Road Name' not in data_df.columns or data_df['Road Name'].empty:
+        st.error("錯誤：資料中沒有有效的 'Road Name' 欄位。")
+        return
+        
     road_names = data_df['Road Name'].unique().tolist()
     
     selected_road = st.sidebar.selectbox(
