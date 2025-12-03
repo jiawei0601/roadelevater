@@ -11,19 +11,21 @@ def load_data_from_gsheet():
     """
     連接 Google Sheet 並讀取高程資料。
     
-    ⚠️ 注意:
-    1. 確保 'service_account.json' 檔案存在於此應用程式的目錄中 (本地運行)。
-    2. 確保 Google Sheet 的名稱和工作表的名稱是正確的。
-    3. 確保您的服務帳號已獲得 Google Sheet 的「檢視者」權限。
+    ⚠️ 注意: 此版本使用 st.secrets 從 Streamlit Cloud 環境讀取授權資訊。
     """
     try:
         # 替換為您的 Google Sheet 檔案名稱和工作表名稱
         SHEET_TITLE = "道路高程資料表"
         WORKSHEET_NAME = "Sheet1" 
         
-        # 認證：使用 service_account.json 檔案進行認證
-        # 如果部署到 Streamlit Cloud，請使用 st.secrets
-        gc = gspread.service_account(filename="service_account.json")
+        # 🌟 關鍵修改點：從 st.secrets 讀取 Service Account 憑證
+        # 憑證名稱 'gdrive_service_account' 必須與您在 Streamlit Secrets 中設定的名稱一致
+        if "gdrive_service_account" not in st.secrets:
+             st.error("錯誤：Streamlit Secrets 中未找到 'gdrive_service_account' 設定。請檢查 Streamlit Cloud Secrets 配置。")
+             return pd.DataFrame()
+        
+        # 使用字典憑證進行認證
+        gc = gspread.service_account_from_dict(st.secrets["gdrive_service_account"])
         sh = gc.open(SHEET_TITLE)
         worksheet = sh.worksheet(WORKSHEET_NAME)
         
@@ -36,7 +38,7 @@ def load_data_from_gsheet():
         df['Distance (m)'] = pd.to_numeric(df['Distance (m)'], errors='coerce')
         df['Elevation (m)'] = pd.to_numeric(df['Elevation (m)'], errors='coerce')
         
-        # 修正先前發現的語法錯誤：確保三個關鍵欄位都有值（這是您的錯誤修正處）
+        # 確保三個關鍵欄位都有值
         df.dropna(subset=['Road Name', 'Distance (m)', 'Elevation (m)'], inplace=True)
         
         if df.empty:
@@ -45,11 +47,9 @@ def load_data_from_gsheet():
 
         return df
         
-    except FileNotFoundError:
-        st.error("錯誤：找不到 'service_account.json' 檔案。請確保金鑰檔案已放置在應用程式目錄中。")
-        return pd.DataFrame()
     except Exception as e:
-        st.error(f"無法讀取 Google Sheet 資料，請檢查授權和檔案名稱：{e}")
+        # 捕捉 Gspread 可能的認證或連接錯誤
+        st.error(f"Google Sheet 連接或讀取失敗。請檢查授權（共享給服務帳號的郵箱）和 Sheet 名稱。詳細錯誤：{e}")
         return pd.DataFrame()
 
 # --- 2. 內插求值函式 ---
